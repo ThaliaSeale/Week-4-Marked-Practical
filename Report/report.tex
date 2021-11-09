@@ -1,0 +1,420 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{parskip}
+\usepackage{latexsym,amsmath,amssymb}
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{times}
+\usepackage{zi4}
+\usepackage[a4paper,left=3cm,right=3cm,top=3cm,bottom=3cm]{geometry}
+
+\usepackage{csvsimple}
+
+\usepackage{readarray}
+
+\usepackage{hyperref}
+
+\title{Linear Models, Marked Practical}
+\author{P118}
+
+\readdef{Week_4_Marked_Practical_Code/saved_values_numeric.txt}{\savedvalues}
+\readarray\savedvalues\savedvs[-,\ncols]
+
+\readarraysepchar{,}
+
+\readdef{Week_4_Marked_Practical_Code/saved_values_text.txt}{\savedvaluestext}
+\readarray\savedvaluestext\savedvstext[-,\ncols]
+
+\begin{document}
+\maketitle \thispagestyle{empty}
+\newpage \pagenumbering{arabic}
+
+
+\section{Summary}
+
+In this report we examine trends in competitor times in swimming races using data from the finals of individual events at the 2016 Olympics and the finals of the 2016 World Championship, exploring the dependence of swim times on other information about the event. We use a Box-Cox transformation to model a normal linear relationship between time and the explanatory variables and discuss the suitability and interpretability of this model compared to other possible normal linear models for the data. We then use this fitted model to determine the significance and effect of variables in the model. Finally, we use the model to predict times for additional races.
+
+\section{Introduction}
+
+We are examining data consisting of competitor times for swimming races from the individual events at the 2016 Olympics and the 2016 World Championships. Table \ref{variables} summarises the information about variables recorded for each time in the dataset. Note that since \verb|event| combines the information contained in \verb|dist|, \verb|stroke|, \verb|sex| and \verb|course|, it contains no additional information and may be ignored in our analysis. \verb|time| is a continuous variable while \verb|stroke|, \verb|sex| and \verb|course| are unordered factors. \verb|dist| variable represents a numerical value, however, it is restricted to only 4 values and so may be treated either as a discrete or continuous variable.
+
+\begin{table}[h]
+  \caption{Summary of variables in the dataset.}
+  \label{variables}
+  \centering
+  \begin{tabular}{lll}
+    \hline
+    \textbf{Variable} & \textbf{Description} & \textbf{Levels} \\
+    \hline
+    \hline
+    \verb|event| & Name of event & \\
+    \verb|dist| & Length of event in meters & 50, 100, 200, 400 \\
+    \verb|stroke| & Stroke swum in the event & Freestyle, Backstroke, \\
+     & & Breastroke, Butterfly, \\
+     & & Medley \\
+    \verb|sex| & Gender of event participants & W (women), M (men) \\
+    \verb|course| & Indication of 25m (short) or 50m (long) pool & Short, Long\\
+    \hline
+    \verb|time| & Time taken for one swimmer in the final, in seconds & (Continuous variable) \\
+    \hline
+  \end{tabular}
+\end{table}
+
+% \begin{table}
+%   \caption{Summary statistics for swim times}
+%   \label{times_summary}
+%   \centering
+%   \begin{tabular}{ll}
+%     \hline
+%     \csvreader[late after line = \\]
+%     {Week_4_Marked_Practical_Code/swim_time_summary.csv}{statistic = \statistic,V1 = \value}%
+%     {\statistic & \value}%
+%     \hline
+%   \end{tabular}
+% \end{table}
+
+Figure \ref{distribution_times} visualises the distribution of the competitor times. We see that there are four distinct peaks that correspond to the four distance categories in the data. Each successive peak appears to have a greater spread.
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.7]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/times_histogram-1.pdf}
+  \caption{Histogram showing the distribution of competitor times. There are four peaks with increasing spread corresponding to the four distance categories in the data.}
+  \label{distribution_times}
+\end{figure}
+
+Plotting against each variable against every other, as in Figure \ref{pairs_plot}, we note that for the most part there does not appear to be a clear relationship between any of the explanatory variables except for distance and stroke where there are some distances for which there is no competition for a particular stroke. There are clear relationships between distance, stroke, sex, course and time, which we shall explore in closer detail.
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.7]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/pairs_plot-1.pdf}
+  \caption{Pairs plot demonstrating the relationship between all variables in the data. There are clear relationships between time and other variables, but mostly unclear associations between other variables.}
+  \label{pairs_plot}
+\end{figure}
+
+Distance appears to explain a large part of the variation in times. Plotting time against distance (Figure \ref{distance_time}) suggests a potential linear relationship between \verb|dist| and \verb|time| if we consider \verb|dist| as a continuous variable, and a non-linear relationship if we consider it as a categorical variable.
+
+\begin{figure}
+  \includegraphics[scale = 0.8]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/distance_plots-1.pdf}
+
+  \caption{Plots showing the relationship between distance and time. When considered as a continuous variable \texttt{dist} suggests a potential linear relationship between the variables; when considered as a categorical variable there is a non-linear relationship.}
+  \label{distance_time}
+\end{figure}
+
+There are subtle differences in the distribution of times for each level of the other explanatory variables (Figure \ref{category_comparison}).
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.8]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/category_comparison-1.pdf}
+
+  \caption{Histograms showing the distributional differences for different factor levels of the categorical explanatory variables in the data. There are subtle differences in distribution at each level.}
+  \label{category_comparison}
+\end{figure}
+
+A final consideration is the potential normality of the data. The histogram of the competitor times clearly shows that the data is not normal, however, within each distance category, variation appears to be close to normal but with deviation in the tails, as the points follow closely the quantile lines (Figure \ref{qq}), with residual variation still present, and thus a normal linear model would seem to be a suitable model choice in this context.
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.8]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/qq_plots-1.pdf}
+  \caption{Normal Q-Q plots for each distance category. At each level, the data appears to be approximately normally distributed.}
+  \label{qq}
+\end{figure}
+
+\section{Methods and Results}
+
+\subsection{Model Selection}
+
+We observed a clear increase in variance with distance, and even fitting the least parsimonious linear model with interaction terms:
+\begin{align}
+  \texttt{time} \sim \texttt{dist}*\texttt{stroke}*\texttt{sex}*\texttt{course}, \label{naive_linear_model}
+\end{align}
+the residual variation, as shown in Figure \ref{residuals_vs_fitted_values_linear_model1}, shows a clear association with fitted values which indicates that a normal linear model of this type is not appropriate for the data.
+% For reference, the residual sum of squares for this model is \savedvs[2,2].
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.5]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/residuals_vs_fitted_values-1.pdf}
+  \caption{A plot of residuals against fitted values for a linear model with all interaction terms. Even with the inclusion of all terms, there is still a clear increase in residuals with the increase of time.}
+  \label{residuals_vs_fitted_values_linear_model1}
+\end{figure}
+
+By examining the situation in more detail, we can arrive at a more plausible model. Consider that for a body moving at constant velocity the relationship between the displacement $d$, velocity $v$ and time elapsed $t$ is given by $t = \frac{d}{v}$. Thus, if a swimmer is moving at a constant speed, there is a linear relationship between displacement and time taken. In this context, the velocity of the swimmer might be related to the characteristics of the swimmer and the race.
+
+Suppose that for every observation $i$, the velocity is normally distributed such that
+\begin{align}
+  v_i = \mathbf{x}_i^T \beta + \epsilon_i, \text{ with } \epsilon_i \sim \mathcal{N}(0,\sigma^2),
+\end{align}
+where $\mathbf{x}_i \in \mathbb{R}^p$ is a vector of explanatory variables, $\beta \in \mathbb{R}^p$ is a vector of coefficients and $\epsilon_i \in \mathbb{R}$ is the random error with variance $\sigma^2$. Then the time would be modelled by
+\begin{align}
+  t = \frac{1}{\mathbf{x}_i^T \beta + \epsilon_i} d \Longleftrightarrow \frac{1}{t} =  (\mathbf{x}_i^T \beta + \epsilon_i) \cdot \frac{1}{d} . \label{weighted_model1}
+\end{align}
+In this model, $\mathbb{V} \mathbf{ar}[\frac{1}{t}] = \frac{\sigma^2}{d^2}$. Thus for larger values of $d$ the variance in $\frac{1}{t}$ becomes smaller, which seems consistent with our observation that with increasing $d$ and $t$, since we previously observed a linear relationship, there is also increasing variance.
+
+Alternatively, we could model the reciprocal of the velocity $v_i$ as normally distributed such that
+\begin{equation}
+  \frac{1}{v_i} = \mathbf{x}_i^T \beta + \epsilon_i, \text{ with } \epsilon_i \sim \mathcal{N}(0,\sigma^2),
+\end{equation}
+\begin{equation}
+   \implies t = (\mathbf{x}_i^T \beta + \epsilon_i) d . \label{weighted_model2}
+\end{equation}
+This means that $\mathbb{V} \mathbf{ar}[t] = d^2 \sigma^2$, which again is plausible given the increasing variance with $t$ and $d$.
+
+Both \eqref{weighted_model1} and \eqref{weighted_model2} are weighted normal linear models. We therefore fit the following models to the data:
+\begin{equation}
+  \frac{1}{\texttt{time}} \sim (\texttt{stroke} + \texttt{sex} + \texttt{course}) * \frac{1}{\texttt{distance}} , \texttt{ weight}_i = \texttt{distance}_i ;
+\end{equation}
+\begin{equation}
+  \texttt{time} \sim (\texttt{stroke} + \texttt{sex} + \texttt{course}) * \texttt{distance} ,  \texttt{ weight}_i = \frac{1}{\texttt{distance}_i};
+\end{equation}
+the variance for observation $i$ is given by $(\sigma/\texttt{weight}_i)^2$.
+% Both models seem to provide a more satisfactory fit for the data \eqref{naive_linear_model}, with residual standard errors \savedvs[3,2] and \savedvs[4,2] respectively.
+Looking at plots of residuals against fitted values in Figure \ref{weighted_least_squares_regression_errors}, we see that that there is far less of a noticeable pattern in the residuals than model \eqref{naive_linear_model}, but that there are still four clusters with distinct shapes suggesting that we still do not have homoskedasticity.
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.7]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/weighted_regression_errors-1.pdf}
+  \caption{Residuals plotted against fitted values for both weighted least squares models. In both models, we see that there appears to be less dependence on the fitted value, but that the dependency has not completely been eliminated.}
+  \label{weighted_least_squares_regression_errors}
+\end{figure}
+
+The final model that we could consider is considering distance as a discrete variable, which necessitates a transformation applied to the response variable since there is a non constant variance in the distance. Using the model in \eqref{naive_linear_model} (but with distance a factor), we can use a profile likelihood to determine a suitable $\lambda$ for a suitable Box-Cox transformation given by:
+\begin{align}
+  t^{(\lambda)} =
+    \begin{cases}
+      \frac{t^\lambda - 1}{\lambda}, \text{ if } \lambda \neq 0 \\
+      \log(t), \text{ if } \lambda = 0.
+    \end{cases}
+\end{align}
+Figure \ref{box_cox_plot}, shows a graph the profile likelihood of $\lambda$ and a 95\% confidence interval for its value. For interpretability, we shall choose $\lambda = 0$ for the response variable transformation using the graph.
+% Fitting the model to the data we see quite a low residual standard error of \savedvs[5,2], and
+Fitting the following model:
+\begin{align}
+  \log(\texttt{time}) \sim \texttt{dist}*\texttt{stroke}*\texttt{sex}*\texttt{course} \label{box_cox_model}
+\end{align}
+Plotting residuals against fitted values (Figure \ref{box_cox_residuals}), we see that residuals seem to be independent of fitted values.
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.6]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/box_cox_plot-1.pdf}
+  \caption{A graph of the profile likelihood of $\lambda$, the Box-Cox transform parameter, for a normal linear model of the data. The nearest interpretable value of $\lambda$ to the maximum likelihood estimate and 95\% interval is 0.}
+  \label{box_cox_plot}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.7]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/box_cox_residuals-1.pdf}
+  \caption{Residuals plotted against fitted values for the Box-Cox transformation model. We see that the dependence on the fitted values seems to have been removed with the transformation.}
+  \label{box_cox_residuals}
+\end{figure}
+
+It remains to compare the models proposed to determine which is the most suitable for the data. In Table \ref{RSS_comparison} we see the residual sum of squares (RSS) values for the four proposed models structures, only regressing against distance so that parsimony is comparable and since distance provides the greatest contribution towards variance in the response. In terms of interpretability, the transformation suggested by the Box-Cox method is sensical since swimmers tiring in longer races, amongst other factors, would mean that it is more appropriate to model the distance categorically and in a non-linear fashion. We see that Box-Cox transformation has the smallest RSS which would indicate a potentially superior fit. The Box-Cox transformation eliminates the pattern in the studentised residuals, has residuals that appear to conform most closely to a normal distribution (Figure \ref{qqnorm_comparison}) so we shall use this model, with $\lambda = 0$, to further analyse the data. Also, note that the predictions required only require the specification of distances at existing factor levels, so the factorial treatment of \verb|dist| is not an issue here.
+
+\begin{table}
+  \caption{RSS values for the proposed models structures, only regressing against \texttt|dist|.}
+  \label{RSS_comparison}
+  \centering
+  \begin{tabular}{cccc}
+      \hline
+      \textbf{Normal Linear} \eqref{naive_linear_model} &\textbf{ Weighted 1} \eqref{weighted_model1} & \textbf{Weighted 2} \eqref{weighted_model2} & \textbf{Box-Cox Transformation} \eqref{box_cox_model}\\
+      \hline
+      \hline
+      \csvreader[late after line = \\]
+      {Week_4_Marked_Practical_Code/RSS.csv}{naive_RSS = \naiveRSS, weights1_RSS = \weightsoneRSS, weights2_RSS = \weightstwoRSS, boxcox_RSS = \boxcoxRSS}%
+      {\naiveRSS & \weightsoneRSS & \weightstwoRSS & \boxcoxRSS}%
+      \hline
+    \end{tabular}
+\end{table}
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.7]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/qqnorm_comparison-1.pdf}
+  \caption{Comparison of Normal Q-Q plots of the residuals for the four proposed models. The Box-Cox transformation produces residuals that are the closest to normally distributed.}
+  \label{qqnorm_comparison}
+\end{figure}
+
+\subsection{Variable Selection}
+
+Since there are somewhat numerous possible combinations of inclusion and exclusion of variables and interactions from the model, we shall use automatic model selection using the Akaike information criterion to search for possible candidates for models that balance fit with parsimony. Using a minimal model of
+\begin{align}
+  \log(\texttt{time}) \sim 1,
+\end{align}
+and a maximal model of
+\begin{align}
+  \log(\texttt{time}) \sim \texttt{dist}*\texttt{stroke}*\texttt{sex}*\texttt{course},
+\end{align}
+we use forward and backward selection to search for a suitable model. Both methods returned the model
+\begin{align}
+  \log(\texttt{time}) \sim &\texttt{dist} + \texttt{stroke} + \texttt{sex} + \texttt{course} \nonumber \\
+  & + \texttt{dist}*\texttt{stroke} + \texttt{dist}*\texttt{sex} \nonumber \\
+  & + \texttt{stroke}*\texttt{sex} + \texttt{stroke}*\texttt{course} \nonumber \\
+  & + \texttt{sex}*\texttt{course}. \label{AIC_model}
+\end{align}
+There model is fairly interpretable having only second order interactions.
+
+Looking at the ANOVA tables (available in Section \ref{ANOVA}) for the model in \eqref{AIC_model} and for the saturated model \eqref{box_cox_model}, we see that the third order interactions do not seem to explain a significant amount of variance and that the interaction $\texttt{dist}*\texttt{course}$ is also not significant.
+
+\subsection{Outlier Detection}
+
+For this section, we shall be using the model found by automatic selection to try to identify outliers.
+
+The largest leverage in the model was \savedvs[6,2]; typically, we treat points with a leverage greater than $\frac{2p}{n}$ as unusual, however, in this fit, this quantity is given by \savedvs[7,2], so there appear to be no points of concern with regards to leverage.
+
+Cook's distances $C_k \gtrsim \frac{8}{n - 2p}$ are potential causes for concern and may require further examination. Entries indexed \savedvstext[2,2] are greater than the threshold and thus influential outliers, and \savedvstext[3,2] are slightly below the bound so could also potentially be problematic data points (Figure \ref{cooks_distances}). Looking at Figure \ref{influential_outlier_plot}, we can see that points with large Cook's distances look to be the points that deviate the most from the central part of the distribution for each factor level of distance. The deviation does not seem to be excessively large compared to the other points or unusual to warrant exclusion from the dataset, thus we shall include these points for the remainder of the analysis.
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.7]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/cooks_distance_plot-1.pdf}
+  \caption{A plot of Cook's distances for the selected model. Points approximately above the $\frac{8}{n - 2p}$ threshold are potentially problematic.}
+  \label{cooks_distances}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[scale = 0.7]{Week_4_Marked_Practical_Code/supplementary_code_files/figure-latex/influential_outlier_plot-1.pdf}
+  \caption{A plot of distance vs time measurements in the dataset with potential influential outliers highlighted. The points do not seem to be out of place for the distribution and so will be included for the remainder of the analysis.}
+  \label{influential_outlier_plot}
+\end{figure}
+
+\subsection{Model Interpretation}
+
+Table \ref{fitted_coefficients} shows estimated coefficients for the model in \eqref{AIC_model}. The response is $\log(\texttt{time})$, thus $\exp(\hat{\beta}_\text{intercept})$, where $\beta_\text{intercept}$ is the coefficient of the intercept, can be interpreted as the maximum likelihood estimate time taken for a female swimming a 50m backstroke race on a long course since these are the baseline levels for each of the factors. Multiplying the baseline by $\exp(\sum_{i \in I} \hat{\beta}_i)$, where $\beta_i$ is the coefficient for the ith term in the model, gives the maximum likelihood estimate for the time taken for the combination of factors specified by the collection of variables and interactions in I. Table \ref{fitted_coefficients_transformed} shows the factor multiplying the baseline for a particular variable/interaction.
+
+There is evidence that the individual explanatory variables have a significant effect on the time taken from the baseline level. As expected, the model suggests that increasing distance means increasing times, as the coefficients are positive. Looking at the coefficients for stroke, for 50m the model suggests that breaststroke is slower than backstroke and that butterfly and freestyle are slightly faster. The variable ``strokeMedley'' does not really have an interpretation alone since the medley is only done for distances greater than 50m. There is also evidence to suggest that times by males and from short courses are also smaller.
+
+The significant interactions between distance and stroke suggest that times do not increase uniformly across the strokes but that different strokes have different increases in times with distance, apart from breaststroke which does not appear not to show significant differences from backstroke.
+
+The interaction between distance and sex suggests that times do not increase similarly for each sex and that there is evidence that males have greater increases in time with increasing distance.
+
+The interaction between stroke and sex do not appear particularly significant, but there is some evidence to suggest that after accounting for the overall difference between times for men and women, that men then are slightly slower at freestyle.
+
+Finally, there appears to be significant differences between all the strokes from the backstroke baseline with regard to the differences in time between short and long courses.
+
+\begin{table}
+  \caption{Estimated values for coefficients of the selected model from \eqref{AIC_model}. ***, **, *  and . indicate significance at the 0.001, 0.01, 0.05 and 0.1 levels respectively using a T-test against null hypothesis $\mathcal{H}_0: \beta_i = 0$, where $\beta_i$ is the coefficient for this ith variable/interaction.}
+  \label{fitted_coefficients}
+  \centering
+  \begin{tabular}{lccccc}
+      \hline
+      \textbf{Variable/Interaction} & $\hat{\beta}$ & $\text{SE}[\beta]$ & T statistic & $\mathbb{P}[|t|>0]$ & Signif. \\
+      \hline
+      \hline
+      \csvreader[late after line = \\]
+      {Week_4_Marked_Practical_Code/coefficients.csv}{Estimate = \estimate, term = \term , Std._Error = \stderror, t_value = \tvalue, Pr(>|t|) = \pt, significance = \signif}
+      {\term & \estimate & \stderror &  \tvalue & \pt & \signif}%
+      \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}
+  \caption{Transformed values for the coefficient estimates.}
+  \label{fitted_coefficients_transformed}
+  \centering
+  \begin{tabular}{lc}
+      \hline
+      \textbf{Variable/Interaction} & $\exp(\hat{\beta})$ \\
+      \hline
+      \hline
+      \csvreader[late after line = \\]
+      {Week_4_Marked_Practical_Code/coefficients_transformed.csv}{transformed_estimate = \transformedestimate, term = \term }
+      {\term & \transformedestimate}%
+      \hline
+    \end{tabular}
+\end{table}
+
+\subsection{Predictions}
+
+In this section we use the selected model to produce prediction intervals. First, we create an interval for predicted $\log(\texttt{time})$, $[\log(\text{PI}_\text{lower}),\log(\text{PI}_\text{upper})]$ and exponentiate this to produce $[\text{PI}_\text{lower},\text{PI}_\text{upper}]$. The predictions and intervals are given in Table \ref{predictions}.
+
+\begin{table}
+  \caption{Prediction values and estimates using the selected model.}
+  \label{predictions}
+  \centering
+  \begin{tabular}{|lcccc||c|cc|}
+      \hline
+      \textbf{\textit{Name}} & \texttt{dist} & \texttt{stroke} & \texttt{sex} & \texttt{course} & $\log(t_\text{predicted})$ & $\log(\text{PI}_\text{lower})$ & $\log(\text{PI}_\text{upper})$ \\
+      \hline
+      \hline
+      \csvreader[late after line = \\]
+      {Week_4_Marked_Practical_Code/predictions.csv}{name = \name, dist = \dist, stroke = \stroke, sex = \sex, course = \course,fit = \logt, lwr = \lwr, upr = \upr}
+      {\name&\dist&\stroke&\sex&\course&\logt&\lwr&\upr}%
+      \hline
+      \\
+      \hline
+      \textbf{\textit{Name}} & \texttt{dist} & \texttt{stroke} & \texttt{sex} & \texttt{course} & $t_\text{predicted}$ & $\text{PI}_\text{lower}$ & $\text{PI}_\text{upper}$ \\
+      \hline
+      \hline
+      \csvreader[late after line = \\]
+      {Week_4_Marked_Practical_Code/predictions.csv}{name = \name, dist = \dist, stroke = \stroke, sex = \sex, course = \course,exp_fit = \t, exp_lwr = \explwr, exp_upr = \expupr}
+      {\name&\dist&\stroke&\sex&\course&\t&\explwr&\expupr}%
+      \hline
+    \end{tabular}
+\end{table}
+
+\section{Conclusions}
+
+We have analysed trends in competitor times in swimming races from the 2016 Olympics and 2016 World cup using a Box-Cox transformation to deal with the heteroscedastic data, concluding that this was a more suitable model type than just a normal linear model or a weighted regression. Using the Akaike information criterion we selected a model that adequately explains the variation in times but is still parsimonious. After looking for outliers, we found that there were no data points that needed to be excluded. Finally, we interpreted the fitted model and used it to produce predictions.
+
+\section{Appendix}
+
+\subsection{Suppementary Code}
+
+Suplementary code may be found via the following link:
+
+\url{https://github.com/ThaliaSeale/Week-4-Marked-Practical}
+
+\subsection{Analysis of Variance Tables} \label{ANOVA}
+
+\subsubsection{ANOVA of Saturated Model}
+
+\begin{verbatim}
+## Analysis of Variance Table
+##
+## Response: log(time)
+##                              Df  Sum Sq Mean Sq    F value    Pr(>F)
+## dist_fact                     3 238.686  79.562 5.6092e+05 < 2.2e-16 ***
+## stroke                        4   2.006   0.501 3.5356e+03 < 2.2e-16 ***
+## sex                           1   1.338   1.338 9.4362e+03 < 2.2e-16 ***
+## course                        1   0.059   0.059 4.1535e+02 < 2.2e-16 ***
+## dist_fact:stroke              8   0.017   0.002 1.4619e+01 < 2.2e-16 ***
+## dist_fact:sex                 3   0.009   0.003 2.0251e+01 3.233e-12 ***
+## stroke:sex                    4   0.004   0.001 6.5202e+00 4.358e-05 ***
+## dist_fact:course              3   0.002   0.001 4.2757e+00  0.005492 **
+## stroke:course                 4   0.006   0.001 9.9974e+00 1.035e-07 ***
+## sex:course                    1   0.004   0.004 2.7716e+01 2.326e-07 ***
+## dist_fact:stroke:sex          8   0.001   0.000 7.8820e-01  0.613282
+## dist_fact:stroke:course       4   0.000   0.000 4.1750e-01  0.796044
+## dist_fact:sex:course          3   0.000   0.000 6.0600e-01  0.611439
+## stroke:sex:course             4   0.001   0.000 1.5641e+00  0.183126
+## dist_fact:stroke:sex:course   4   0.000   0.000 2.5560e-01  0.906168
+## Residuals                   390   0.055   0.000
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+\subsubsection{ANOVA of Selected Model}
+
+\begin{verbatim}
+## Analysis of Variance Table
+##
+## Response: log(time)
+##                              Df  Sum Sq Mean Sq    F value    Pr(>F)
+## dist_fact                     3 238.686  79.562 5.6092e+05 < 2.2e-16 ***
+## stroke                        4   2.006   0.501 3.5356e+03 < 2.2e-16 ***
+## sex                           1   1.338   1.338 9.4362e+03 < 2.2e-16 ***
+## course                        1   0.059   0.059 4.1535e+02 < 2.2e-16 ***
+## dist_fact:stroke              8   0.017   0.002 1.4619e+01 < 2.2e-16 ***
+## dist_fact:sex                 3   0.009   0.003 2.0251e+01 3.233e-12 ***
+## stroke:sex                    4   0.004   0.001 6.5202e+00 4.358e-05 ***
+## dist_fact:course              3   0.002   0.001 4.2757e+00  0.005492 **
+## stroke:course                 4   0.006   0.001 9.9974e+00 1.035e-07 ***
+## sex:course                    1   0.004   0.004 2.7716e+01 2.326e-07 ***
+## dist_fact:stroke:sex          8   0.001   0.000 7.8820e-01  0.613282
+## dist_fact:stroke:course       4   0.000   0.000 4.1750e-01  0.796044
+## dist_fact:sex:course          3   0.000   0.000 6.0600e-01  0.611439
+## stroke:sex:course             4   0.001   0.000 1.5641e+00  0.183126
+## dist_fact:stroke:sex:course   4   0.000   0.000 2.5560e-01  0.906168
+## Residuals                   390   0.055   0.000
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+ \end{document}

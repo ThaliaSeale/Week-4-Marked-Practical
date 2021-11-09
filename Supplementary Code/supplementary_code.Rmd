@@ -1,0 +1,662 @@
+---
+title: "Linear Models, Marked Practical, Supplementary Code"
+output:
+  pdf_document: 
+    keep_tex: yes
+  html_notebook: default
+---
+
+```{r, setup}
+swim <- read.csv("swim.csv")
+
+library(tidyverse)
+
+library(GGally)
+library(patchwork)
+
+library(MASS)
+
+saved_values_numeric <- data.frame(name = c(), value = c())
+saved_values_text <- data.frame(name = c(), value = c())
+```
+
+# Exploratory Analysis
+
+First we have to transform the data into a suitable form for analysis:
+
+```{r}
+# Factorialising categorial variables
+swim$stroke <- as.factor(swim$stroke)
+swim$sex <- as.factor(swim$sex)
+swim$course <- as.factor(swim$course)
+# For the moment we are considering distance as a continous value
+swim$dist <- as.integer(swim$dist)
+
+# Removing the event column since it is providing information already included in the
+# other columns
+swim <- swim %>%
+  dplyr::select(-event)
+```
+
+## Basic Features of the Data
+
+The data consists of one continuous variable, time; one ordinal variable, distance; and three categorical variables, sex, course and stroke. 
+
+```{r}
+summary(swim$stroke)
+summary(swim$sex)
+summary(swim$dist)
+summary(swim$course)
+
+# Summarising swim times and outputting results to an external file
+swim_summary <- as.data.frame(as.matrix(summary(swim$time)))
+swim_summary$statistic <- row.names(swim_summary)
+swim_summary <- swim_summary %>%
+  dplyr::select(statistic,V1)
+row.names(swim_summary) <- NULL
+swim_summary
+
+write.csv(swim_summary,file = "swim_time_summary.csv",quote = FALSE)
+```
+
+The overall distribution of the data is visualised in the following histogram:
+
+```{r times_histogram}
+swim %>%
+  mutate(dist = as.factor(dist)) %>%
+  ggplot() +
+  geom_histogram(aes(x = time, fill = dist),binwidth = 10) +
+  theme_bw() +
+  labs(title = "Distribution of Competitor Times", x = "Time", y = "Count") +
+  scale_fill_discrete(name = "Distance (m)")
+```
+
+The distribution of times consists of four very distinct peaks, which appear to become wider with increasing time.
+
+## Exploratory Plots
+
+First we look at a plot of the all the variables plotted against each other in a pairs plot:
+
+```{r pairs_plot}
+pairs(swim, main = "Pairs Plot of Competitor Data")
+```
+Each of the categorical variables, distance, stroke, sex and course seem for the most part independent of each other apart from distance and stroke where we can see that some there are there are some distances for which there is no competition for a particular stroke. There are clear relationships between distance, stroke, sex and course and time, which we shall explore in closer detail using some clearer plots.
+
+```{r boxplot_histogram_distance}
+dist_boxplot <- swim %>%
+  mutate(dist = as.factor(dist)) %>%
+  ggplot() +
+  geom_boxplot(aes(y = time, x = dist, fill = dist)) +
+  guides(fill = "none") +
+  theme_bw()
+
+dist_histogram <- swim %>%
+  mutate(dist = as.factor(dist)) %>%
+  ggplot() +
+  geom_histogram(aes(x = time, fill = dist),binwidth = 10) +
+  facet_grid(dist ~ .) +
+  guides(fill = "none") +
+  theme_bw()
+
+dist_boxplot + dist_histogram +
+  plot_annotation(
+  title = "Comparison of Times for Race Distance"
+)
+```
+Looking at the boxplot and histogram of time plotted separately for each distance category, we can see that distance explains a large part of the variation in the times, with each of the four peaks in the distribution of times comprising of a different distance category. There is a greater variation in distance with time.
+
+```{r distance_plots}
+min_time_50m <- min(filter(swim,dist == 50)$time)
+max_time_50m <- max(filter(swim,dist == 50)$time)
+
+min_time_400m <- min(filter(swim,dist == 400)$time)
+max_time_400m <- max(filter(swim,dist == 400)$time)
+
+continous_distance_plot <- swim %>%
+  ggplot() +
+  geom_point(aes(x = dist, y = time, colour = dist)) +
+  geom_segment(aes(x = 50, y = min_time_50m,
+                 xend = 400, yend = min_time_400m), alpha = 0.7) +
+  geom_segment(aes(x = 50, y = max_time_50m,
+                 xend = 400, yend = max_time_400m), alpha = 0.7) +
+  labs(title = "Continuous Distance", x = "Distance", y = "Time") +
+  theme_bw() +
+  guides(colour = "none")
+
+discrete_distance_plot <- swim %>%
+  mutate(dist = as.factor(dist)) %>%
+  ggplot() +
+  geom_boxplot(aes(x = dist, y = time, fill = dist)) +
+  labs(title = "Discrete Distance", x = "Distance", y = "Time") +
+  theme_bw() +
+  guides(fill = "none")
+
+continous_distance_plot + discrete_distance_plot + 
+  plot_annotation(
+  title = "Swim Times vs Distance"
+)
+```
+
+We can see that while it appears that there could be a linear relationship between distance and time, the variation in times increases with distance. This can also be observed in the boxplot.
+
+
+```{r boxplot_histogram_course}
+course_boxplot <- swim %>%
+  dplyr::select(time, course) %>%
+  ggplot() +
+  geom_boxplot(aes(y = time, x = course, fill = course)) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(x = "Course", y = "Time")
+
+course_histogram <- swim %>%
+  ggplot() +
+  geom_histogram(aes(x = time, fill = course),binwidth = 10) +
+  facet_grid(course ~ .) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(x = "Course", y = "Time")
+
+course_boxplot + course_histogram +
+  plot_annotation(
+  title = "Comparison of Times for Long and Short Courses"
+)
+```
+
+From these plots, we can see that the median and modal times are higher for long courses and that there are some distributional differences for each different type of course. Looking at the histograms side by side however, we can see that the variation in time explained by the course type is much smaller than for distance.
+
+```{r boxplot_histogram_sex}
+sex_boxplot <- swim %>%
+  dplyr::select(time, sex) %>%
+  ggplot() +
+  geom_boxplot(aes(y = time, x = sex, fill = sex)) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(x = "Sex", y = "Time")
+
+sex_histogram <- swim %>%
+  ggplot() +
+  geom_histogram(aes(x = time, fill = sex),binwidth = 10) +
+  facet_grid(sex ~ .) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(x = "Sex", y = "Time")
+
+sex_boxplot + sex_histogram +
+  plot_annotation(
+  title = "Comparison of Times for Males and Females"
+)
+```
+
+We see that there are some differences between the times for females and males, with females having slightly longer times overall.
+
+```{r boxplot_histogram_stroke}
+stroke_boxplot <- swim %>%
+  dplyr::select(time, stroke) %>%
+  ggplot() +
+  geom_boxplot(aes(y = time, x = stroke, fill = stroke)) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(x = "Stroke", y = "Time")
+
+stroke_histogram <- swim %>%
+  ggplot() +
+  geom_histogram(aes(x = time, fill = stroke),binwidth = 10) +
+  guides(fill = "none") +
+  facet_grid(stroke ~ .) +
+  theme_bw() +
+  labs(x = "Stroke", y = "Time")
+
+stroke_boxplot + stroke_histogram +
+  plot_annotation(
+  title = "Comparison of Times for Different strokes"
+)
+```
+
+We can see there are a few differences in the distributions of the stroke times. In particular, as we previously observed, most of the strokes do not participate in all distances, which appears to be the variable contributing most to the variation of the times for each of the strokes.
+
+The following graph summarises all of the distributional observations for each of the categorical variables
+
+```{r category_comparison}
+(course_histogram + sex_histogram) + stroke_histogram +
+  plot_layout(widths = c(2,2, 1.5)) +
+  plot_annotation(title = "Distribution of Times by Category")
+```
+
+
+Of interest is the normality of the data. The histogram of the data clearly shows that the data is not normal, however within each distance category, variation appears normal, as the points mostly close to the ab-line, with some residual variation, and thus it may be appropriate to apply a normal linear model to the data.
+
+```{r qq_plots}
+swim %>%
+  ggplot(aes(sample = time)) +
+  geom_qq() +
+  geom_qq_line() +
+  facet_wrap(dist ~ .,scales = "free") +
+  labs(title = "Normal Q-Q Plots of Times for Each Distance Category",
+       x = "Theoretical Quantiles",
+       y = "Sample Quantiles") +
+  theme_bw()
+
+```
+
+# Model Choice
+
+The least parsimonious normal linear model applied to the data produces residuals that are clearly associated with the fitted values, which violates model assumptions:
+
+```{r residuals_vs_fitted_values}
+swim_lm <- lm(time ~ dist*stroke*sex*course, data = swim)
+
+summary(swim_lm)
+
+#Residual standard error of the model
+sqrt(deviance(swim_lm)/df.residual(swim_lm))
+saved_values_numeric <- data.frame(name = "Residual Standard Error, Naive Model",
+                                   value = sqrt(deviance(swim_lm)/df.residual(swim_lm)))
+
+data.frame(fitted.values = swim_lm$fitted.values, studentised.residuals = rstudent(swim_lm)) %>%
+  ggplot() +
+  geom_point(aes(x = fitted.values, y = studentised.residuals)) +
+  theme_bw() +
+  labs(x = "Fitted Values", y = "Studentised Residuals",
+       title = "Studentised Residuals vs Fitted Values, Naive Linear Model")
+```
+
+Looking at the plausibility of a physical model:
+
+```{r}
+swim %>%
+  mutate(reciprocal_time = 1/time, reciprocal_dist = 1/dist) -> swim
+
+min_time_50m <- min(
+  filter(swim,reciprocal_dist == min(swim$reciprocal_dist))$reciprocal_time)
+max_time_50m <- max(
+  filter(swim,reciprocal_dist == min(swim$reciprocal_dist))$reciprocal_time)
+
+min_time_400m <- min(
+  filter(swim,reciprocal_dist == max(swim$reciprocal_dist))$reciprocal_time)
+max_time_400m <- max(
+  filter(swim,reciprocal_dist == max(swim$reciprocal_dist))$reciprocal_time)
+
+
+
+continous_distance_plot <- swim %>%
+  ggplot() +
+  geom_point(aes(x = reciprocal_dist, y = reciprocal_time, colour = dist)) +
+  geom_segment(aes(x = min(swim$reciprocal_dist), y = min_time_50m,
+                 xend = max(swim$reciprocal_dist), yend = min_time_400m), alpha = 0.7) +
+  geom_segment(aes(x = min(swim$reciprocal_dist), y = max_time_50m,
+                 xend = max(swim$reciprocal_dist), yend = max_time_400m), alpha = 0.7) +
+  labs(title = "Reciprocal Distance vs Reciprocal Distance",
+       x = "Reciprocal Distance", y = " Reciprocal Time") +
+  theme_bw() +
+  guides(colour = "none")
+
+continous_distance_plot
+```
+
+Fitting weighted regressons 1 and 2:
+
+```{r}
+weights1 <- swim$dist^2
+swim_lm_weights1 <- lm(I(1/time) ~ (stroke + sex + course)*I(1/dist),
+                       data = swim, weights = weights1)
+
+weights2 <- 1/swim$dist^2
+swim_lm_weights2 <- lm(time ~ (stroke + sex + course)*dist,
+                       data = swim, weights = weights2)
+
+summary(swim_lm_weights1)
+summary(swim_lm_weights2)
+
+# Saving RSS values
+saved_values_numeric <- rbind(saved_values_numeric,
+  data.frame(name = c("Residual Standard Error, Weights 1",
+                      "Residual Standard Error, Weights 2"),
+             value = c(sqrt(deviance(swim_lm_weights1)/df.residual(swim_lm_weights1)),
+                       sqrt(deviance(swim_lm_weights2)/df.residual(swim_lm_weights2)))))
+
+```
+Errors are still problematic with these models:
+
+```{r weighted_regression_errors}
+swim_lm_weights1_errors <- data.frame(fitted_values = fitted.values(swim_lm_weights1),
+                                      studentised.residuals = rstudent(swim_lm_weights1))
+swim_lm_weights2_errors <- data.frame(fitted_values = fitted.values(swim_lm_weights2),
+                                      studentised.residuals = rstudent(swim_lm_weights2))
+
+swim_lm_weights1_error_plot <- swim_lm_weights1_errors %>%
+  ggplot() +
+  geom_point(aes(x = fitted_values, y = studentised.residuals)) +
+  theme_bw() +
+  labs(x = "Fitted Values", y = "Studentised Residuals",
+       title = "Studentised Residuals vs Fitted Values, Weighted Regression 1")
+
+swim_lm_weights2_error_plot <- swim_lm_weights2_errors %>%
+  ggplot() +
+  geom_point(aes(x = fitted_values, y = studentised.residuals)) +
+  theme_bw() +
+  labs(x = "Fitted Values", y = "Studentised Residuals",
+       title = "Studentised Residuals vs Fitted Values, Weighted Regression 2")
+
+swim_lm_weights1_error_plot / swim_lm_weights2_error_plot
+```
+Now we consider a Box-Cox transformation:
+
+```{r box_cox_plot}
+swim$dist_fact <- as.factor(swim$dist)
+swim_lm_discrete <- lm(time ~ dist_fact*stroke*sex*course, swim)
+
+boxcox(swim_lm_discrete)
+```
+$\lambda = 0$ is best for interpretability.
+
+Fitting the transformed model:
+
+```{r}
+swim_lm_boxcox <- lm(log(time) ~ dist_fact*stroke*sex*course,data = swim)
+
+summary(swim_lm_boxcox)
+```
+
+```{r box_cox_residuals}
+swim_lm_boxcox_errors <- data.frame(fitted_values = fitted.values(swim_lm_boxcox),
+                                    studentised.residuals = rstudent(swim_lm_boxcox))
+
+swim_lm_boxcox_error_plot <- swim_lm_boxcox_errors %>%
+  ggplot() +
+  geom_point(aes(x = fitted_values, y = studentised.residuals)) +
+  theme_bw() +
+  labs(x = "Fitted Values", y = "Studentised Residuals",
+       title = "Studentised Residuals vs Fitted Values, Box-Cox")
+
+swim_lm_boxcox_error_plot
+
+saved_values_numeric <- rbind(saved_values_numeric,
+  data.frame(name = c("Residual Standard Error, Box-Cox Transformation Model"),
+             value = c(sqrt(deviance(swim_lm_boxcox)/df.residual(swim_lm_boxcox)))))
+
+```
+Comparison of all fits with just distance:
+
+```{r}
+swim_lm_dist <- lm(time ~ dist, data = swim)
+
+swim_lm_boxcox_dist <- lm(log(time) ~ dist_fact,data = swim)
+
+
+weights1 <- swim$dist^2
+swim_lm_weights1_dist <- lm(I(1/time) ~ I(1/dist), data = swim, weights = weights1)
+
+weights2 <- 1/swim$dist^2
+swim_lm_weights2_dist <- lm(time ~ dist, data = swim, weights = weights2)
+
+dist_fitted_values <- data.frame(naive_lm = swim_lm_dist$fitted.values,
+                                 weights1_lm = 1/swim_lm_weights1_dist$fitted.values,
+                                 weights2_lm = swim_lm_weights2_dist$fitted.values,
+                                 boxcox_lm = exp(swim_lm_boxcox_dist$fitted.values),
+                                 time = swim$time)
+
+
+dist_fitted_values <- dist_fitted_values %>% 
+  mutate(naive_lm_residuals = (naive_lm - time)^2,
+         weights1_lm_residuals = (weights1_lm - time)^2,
+         weights2_lm_residuals = (weights2_lm - time)^2,
+         boxcox_lm_residuals = (boxcox_lm - time)^2) %>%
+  dplyr::select(naive_lm_residuals,weights1_lm_residuals,
+                weights2_lm_residuals,boxcox_lm_residuals) %>%
+  summarise(naive_RSS = sum(naive_lm_residuals),
+            weights1_RSS = sum(weights1_lm_residuals),
+            weights2_RSS = sum(weights2_lm_residuals),
+            boxcox_RSS = sum(boxcox_lm_residuals))
+  
+dist_fitted_values <- signif(dist_fitted_values, digits = 4)
+
+dist_fitted_values
+write.csv(dist_fitted_values, file = "RSS.csv",quote = FALSE)
+```
+
+Comparison of QQ-plots:
+
+```{r qqnorm_comparison}
+error_plot <- data.frame(data.frame(naive_lm = swim_lm_dist$residuals,
+                                    weights1_lm = swim_lm_weights1_dist$residuals,
+                                    weights2_lm = swim_lm_weights2_dist$residuals,
+                                    boxcox_lm = swim_lm_boxcox_dist$residuals))
+
+error_plot <- error_plot %>%
+  pivot_longer(cols = 1:4, names_to = "Model", values_to = "Residuals")
+
+error_plot %>%
+  ggplot(aes(sample = Residuals)) +
+  geom_qq() +
+  geom_qq_line() +
+  facet_wrap(Model ~ ., scales = "free") +
+  theme_bw() +
+  labs(title = "Comparison of Normal Q-Q plots of Residuals",
+       x = "Theoretical Quantiles",y = "Sample Quantiles")
+```
+
+
+# Variable Selection
+
+Now that we have arrived at a chosen model structure we can look at variable selection.
+
+Returning to the saturated Box-Cox model we can look at the significance of fitted value for a cursory view on which factors may be significant or not:
+
+```{r}
+summary(swim_lm_boxcox)
+anova(swim_lm_boxcox)
+```
+We see that the main influences seem to be the baseline influences of each factor, apart from the course length.
+
+We use automatic model selection using the Akaike information criterion to find a model that balances fit and parsimony:
+
+```{r}
+# The minimal model we can fit
+null_lm <- lm(log(time) ~ 1, data = swim)
+# Saturated model
+sat_lm <- swim_lm_boxcox
+```
+
+Forward selection:
+
+```{r}
+forward_selection <- stepAIC(null_lm, scope = list(lower = null_lm, upper = sat_lm),
+        data = swim, direction = "forward")
+```
+
+Backward selection:
+
+```{r}
+backward_selection <- stepAIC(sat_lm, scope = list(lower = null_lm, upper = sat_lm),
+        data = swim, direction = "backward")
+backward_selection
+```
+
+ANOVA of all second order terms:
+
+```{r}
+swim_lm_second_order <- lm(log(time) ~ dist_fact + stroke + sex + course
+                           + dist_fact:stroke + dist_fact:sex + stroke:sex
+                           + stroke:course + sex:course + dist_fact:course,
+                           data = swim)
+anova(swim_lm_second_order)
+```
+
+
+# Outlier detection
+
+Let us look at the plot diagnostics:
+
+```{r}
+swim_lm_selected <- lm(formula = log(time) ~ dist_fact + stroke + sex + course
+                       + dist_fact:stroke + dist_fact:sex + stroke:sex
+                       + stroke:course + sex:course, data = swim)
+plot(swim_lm_selected)
+```
+
+Max leverage value is less than the value we should be concerned.
+
+```{r}
+max(hatvalues(swim_lm_selected))
+2*length(swim_lm_selected$coefficients)/dim(swim)[1]
+
+saved_values_numeric <- rbind(saved_values_numeric,
+  data.frame(name = c("Maximum Leverage",
+                      "2p/n"),
+             value = c(max(hatvalues(swim_lm_selected)),
+                       2*length(swim_lm_selected$coefficients)/dim(swim)[1])))
+```
+
+Cook's distances:
+
+```{r cooks_distance_plot}
+cooks_bound <-  8 / (dim(swim)[1] - 2 * length(swim_lm_selected$coefficients))
+
+data.frame(cooks_distance = cooks.distance(swim_lm_selected), index = 1:dim(swim)[1]) %>%
+  mutate(influential_outlier = cooks_distance >= cooks_bound - 0.001) %>%
+  ggplot() +
+  geom_point(aes(x = index, y = cooks_distance, colour = influential_outlier)) +
+  geom_text(aes(x = index, y = cooks_distance,
+                label = ifelse(influential_outlier,index,NA)),
+            size = 3, nudge_x = 13, nudge_y = 0.0005) +
+  geom_hline(aes(yintercept = cooks_bound), colour = "#C77CFF") +
+  geom_text(aes( x = 10, y = cooks_bound, label = "8/(n - 2p)", vjust = -0.5),
+            size = 3,colour = "#C77CFF") + 
+  labs(title = "Cook's Distances for Selected Model",
+       x = "Index", y = "Cook's Distance") +
+  theme_bw() +
+  scale_colour_manual(name = "Influential Outlier", values = c("#00BFC4","#F8766D"))
+```
+
+```{r} 
+influential_outliers <- (data.frame(cooks_distance = cooks.distance(swim_lm_selected),
+                                    index = 1:dim(swim)[1]) %>%
+                           mutate(influential_outlier = cooks_distance >= cooks_bound) %>%
+                           filter(influential_outlier == TRUE))$index
+
+saved_values_text <- rbind(
+  saved_values_text,
+  data.frame(name = "Influential Outliers",
+             value = paste(
+               paste(influential_outliers[1:(length(influential_outliers)-1)], sep = ","),
+               influential_outliers[length(influential_outliers)],
+               sep = " and ")))
+
+near_influential_outliers <- (data.frame(cooks_distance = cooks.distance(swim_lm_selected),
+                                         index = 1:dim(swim)[1]) %>%
+                                mutate(influential_outlier =
+                                         cooks_distance <= cooks_bound 
+                                       & cooks_distance >= cooks_bound - 0.001) %>% 
+                                filter(influential_outlier == TRUE))$index
+
+saved_values_text <- rbind(
+  saved_values_text,
+  data.frame(name = "Near Influential Outliers",
+             value = paste(
+               paste(near_influential_outliers[1:(length(near_influential_outliers)-1)],
+                     sep = ", "),
+               influential_outliers[length(influential_outliers)],
+               sep = " and ")))
+
+```
+
+Examining points:
+
+```{r influential_outlier_plot}
+influential_outlier_points <- swim %>%
+  slice(c(influential_outliers,near_influential_outliers))
+
+rbind(mutate(influential_outlier_points, Series = "influential_outliers"),
+      mutate(swim, Series = "data_points")) %>%
+  ggplot() +
+  geom_point(aes(x = dist, y = time, colour = Series,size = Series)) +
+  theme_bw() +
+  labs(title = "Plot of Distance vs Time Highlighting Influential Outliers",
+       x = "Distance", y = "Time") +
+  scale_colour_discrete(labels = c("Data points","Potential influential outliers")) +
+  guides(size = FALSE)
+```
+
+# Model Interpretation
+
+```{r}
+coefficients <- as.data.frame(summary(swim_lm_selected)$coefficients)
+coefficients <- signif(coefficients[,1:dim(coefficients)[2]],digits = 3)
+coefficients$term <- rownames(coefficients)
+coefficients <- coefficients %>%
+  mutate(term = str_replace(term,"dist_fact","dist")) %>%
+  mutate(term = str_replace(term, ":", "*")) %>%
+  mutate(significance = ifelse(`Pr(>|t|)`<0.001,
+                               "***",
+                               ifelse(`Pr(>|t|)`<0.01,
+                                      "**",
+                                      ifelse(`Pr(>|t|)`<0.05,
+                                             "*",
+                                             ifelse(`Pr(>|t|)`<0.1,
+                                                    ".",
+                                                    "")))))
+colnames(coefficients) <- str_replace(colnames(coefficients), " ", "_")
+coefficients
+
+write.csv(coefficients,row.names = F,file = "coefficients.csv", quote = F)
+```
+Transformed coefficients:
+
+```{r}
+coefficients_transformed <- coefficients %>%
+  dplyr::select(term,Estimate) %>%
+  mutate(transformed_estimate = signif(exp(Estimate),digits = 4))
+
+
+write.csv(coefficients_transformed,row.names = F,
+          file = "coefficients_transformed.csv", quote = F)
+```
+
+
+# Prediction
+
+Loading predictors
+
+```{r}
+write("name dist stroke sex course
+RaceA 400 Freestyle F Long
+RaceB 50 Backstroke F Long
+RaceC 400 Butterfly F Long
+RaceD 100 Medley F Long","predictors")
+predictors <- read.table("predictors", header = T)
+predictors <- predictors %>%
+  mutate(sex = ifelse(sex,"M","F"),
+         dist_fact = as.factor(dist))
+predictors
+```
+Predictions:
+
+```{r}
+predict.lm(swim_lm_selected,predictors,interval = "prediction")
+
+predictions <- data.frame(predictors,predict.lm(swim_lm_selected,predictors,
+                                                interval = "prediction"))
+predictions <- predictions %>%
+  mutate(across(7:9, exp, .names = "exp_{.col}")) %>%
+  mutate(across(7:12,signif,digits = 4))
+write.csv(predictions,"predictions.csv", quote = F)
+```
+
+
+# Misc
+
+```{r}
+saved_values_numeric <- saved_values_numeric %>%
+  mutate(name = str_replace_all(name," ","_"),
+         value = signif(value, digits = 3))
+
+saved_values_text <- saved_values_text %>%
+  mutate(name = str_replace_all(name," ","_"))
+
+
+write.table(saved_values_numeric, file = "saved_values_numeric.txt",
+            row.names = FALSE, quote = F)
+write.csv(saved_values_text, file = "saved_values_text.txt",
+          row.names = FALSE, quote = F)
+```
